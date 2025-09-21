@@ -1,5 +1,11 @@
+use bincode;
 use rand::prelude::*;
+use serde::{Deserialize, Serialize};
+use std::fs::File;
+use std::io::{Read, Write};
+use std::iter::zip;
 
+#[derive(Serialize, Deserialize, Debug)]
 pub struct SigmoidNeuron {
     pub activation: f32,
     pub bias: f32,
@@ -30,6 +36,7 @@ impl SigmoidNeuron {
     }
 }
 
+#[derive(Serialize, Deserialize, Debug)]
 pub struct Layer {
     neurons: Vec<SigmoidNeuron>,
 }
@@ -61,6 +68,7 @@ impl Layer {
     }
 }
 
+#[derive(Serialize, Deserialize, Debug)]
 pub struct Network {
     layers: Vec<Layer>,
 }
@@ -89,6 +97,22 @@ impl Network {
         Self { layers }
     }
 
+    pub fn serialize(&self, filename: &str) {
+        let encoded: Vec<u8> = bincode::serialize(&self).unwrap();
+
+        let mut file = File::create(filename).unwrap();
+        file.write_all(&encoded).unwrap();
+    }
+
+    pub fn read(filename: &str) -> Option<Self> {
+        let mut file = File::open(filename).ok()?;
+        let mut buffer = Vec::new();
+        file.read_to_end(&mut buffer).ok()?;
+
+        let decoded: Self = bincode::deserialize(&buffer).ok()?;
+        return Some(decoded);
+    }
+
     pub fn get_output(&self) -> Vec<f32> {
         self.layers
             .last()
@@ -99,7 +123,7 @@ impl Network {
             .collect()
     }
 
-    pub fn set_input(&mut self, input_activations: Vec<f32>) {
+    pub fn set_input(&mut self, input_activations: &Vec<f32>) {
         let input_layer = &mut self.layers[0];
 
         for (index, neuron) in input_layer.neurons.iter_mut().enumerate() {
@@ -114,5 +138,36 @@ impl Network {
             let layer2 = &mut right[0];
             layer1.feed_forward(layer2);
         }
+    }
+
+    pub fn total_cost(
+        &mut self,
+        training_inputs: &Vec<Vec<f32>>,
+        expected_outputs: &Vec<Vec<f32>>,
+    ) -> f32 {
+        assert!(training_inputs.len() == expected_outputs.len());
+
+        let mut total = 0.0;
+        for (input, expect_output) in zip(training_inputs, expected_outputs) {
+            self.set_input(input);
+            self.run();
+
+            let output = self.get_output();
+            assert!(output.len() == expect_output.len());
+
+            let result = output
+                .iter()
+                .enumerate()
+                .map(|(index, activiation)| *activiation - expect_output[index])
+                .fold(0.0, |acc, x| acc + x * x);
+
+            total += result;
+        }
+
+        return total / (2.0 * training_inputs.len() as f32);
+    }
+
+    pub fn train(&mut self, training_inputs: &Vec<Vec<f32>>, expected_outputs: &Vec<Vec<f32>>) {
+        unimplemented!()
     }
 }
