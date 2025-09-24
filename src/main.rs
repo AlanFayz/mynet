@@ -14,30 +14,21 @@ fn main() {
     println!("{} samples ready for NN input", samples.len());
 
     // simple nand gate for testing
-    //let mut network = Network::read("nand_network.bin").unwrap();
     let mut network = Network::read("nand_network_training_test.bin").unwrap();
 
-    for _ in 0..100 {
-        network.train(
-            &vec![
-                vec![0.0, 0.0],
-                vec![0.0, 1.0],
-                vec![1.0, 0.0],
-                vec![1.0, 1.0],
-            ],
-            &vec![vec![1.0], vec![1.0], vec![1.0], vec![0.0]],
-            0.1,
-        );
+    let nand_inputs = vec![
+        vec![0.0, 0.0],
+        vec![0.0, 1.0],
+        vec![1.0, 0.0],
+        vec![1.0, 1.0],
+    ];
 
-        let cost = network.total_cost(
-            &vec![
-                vec![0.0, 0.0],
-                vec![0.0, 1.0],
-                vec![1.0, 0.0],
-                vec![1.0, 1.0],
-            ],
-            &vec![vec![1.0], vec![1.0], vec![1.0], vec![0.0]],
-        );
+    let nand_outputs = vec![vec![1.0], vec![1.0], vec![1.0], vec![0.0]];
+
+    for _ in 0..100 {
+        network.train(&nand_inputs, &nand_outputs, 0.1);
+
+        let cost = network.total_cost(&nand_inputs, &nand_outputs);
 
         println!("cost: {cost}");
 
@@ -52,11 +43,14 @@ fn main() {
             network.set_input(&input);
             network.run();
             let result = network.get_output()[0];
+
             println!("{label}: {result:.6}");
         }
 
         println!("done");
     }
 
+    let accuracy = network.calculate_accuracy(&nand_inputs, &nand_outputs, 0.5) * 100.0;
+    println!("network accuracy {accuracy}\n");
     network.serialize("nand_network_training_test.bin");
 }

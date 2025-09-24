@@ -242,4 +242,28 @@ impl Network {
             }
         }
     }
+
+    pub fn calculate_accuracy(
+        &mut self,
+        inputs: &Vec<Vec<f32>>,
+        outputs: &Vec<Vec<f32>>,
+        threshold: f32,
+    ) -> f32 {
+        assert_eq!(inputs.len(), outputs.len());
+
+        let mut total_correct = 0;
+        for (input, output) in zip(inputs, outputs) {
+            self.set_input(input);
+            self.run();
+
+            total_correct += self
+                .get_output()
+                .iter()
+                .map(|x| if *x >= threshold { 1.0 } else { 0.0 })
+                .enumerate()
+                .all(|(index, x)| x == output[index]) as i32;
+        }
+
+        return total_correct as f32 / inputs.len() as f32;
+    }
 }
