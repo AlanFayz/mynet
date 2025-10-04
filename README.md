@@ -8,8 +8,11 @@ The goal is to explore the behavior of different architectures, activation funct
 ## Current Results
 
 **Dataset:** MNIST  
+
 **Model:** Fully Connected Neural Network (Sigmoid activations)  
+
 **Batch Size:** 256
+
 **Peak Accuracy:** ~94% after ~1 hour of training  
 
 Visualization of training progress:  
