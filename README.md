@@ -20,7 +20,7 @@ sudo apt install libopenblas-dev
 
 **Dataset:** MNIST  
 
-**Model:** Fully Connected Neural Network (Sigmoid activations)  
+**Model:** Neural Network with 2 hidden layers with 32 neurons.
 
 **Batch Size:** 256
 
