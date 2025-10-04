@@ -6,7 +6,7 @@ The goal is to explore the behavior of different architectures, activation funct
 ---
 # Usage
 
-Feel free to clone the repository and experiment with the models yourself. All the datasets are already available on the github.
+Feel free to clone the repository and experiment with the models yourself. All the datasets are already downloaded on this repository.
 One prerequisit is you need to have open-blas installed on your system, to do this on ubuntu its
 
 ```
