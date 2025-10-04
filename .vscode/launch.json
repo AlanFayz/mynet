@@ -7,15 +7,16 @@
         {
             "type": "lldb",
             "request": "launch",
-            "name": "Debug executable 'sound-classifier'",
+            "name": "Release executable",
             "cargo": {
                 "args": [
                     "build",
-                    "--bin=sound-classifier",
-                    "--package=sound-classifier"
+                    "--bin=mynet",
+                    "--package=mynet",  
+                    "--release"
                 ],
                 "filter": {
-                    "name": "sound-classifier",
+                    "name": "mynet",
                     "kind": "bin"
                 }
             },
@@ -25,16 +26,34 @@
         {
             "type": "lldb",
             "request": "launch",
-            "name": "Debug unit tests in executable 'sound-classifier'",
+            "name": "Debug executable 'mynet'",
+            "cargo": {
+                "args": [
+                    "build",
+                    "--bin=mynet",
+                    "--package=mynet"
+                ],
+                "filter": {
+                    "name": "mynet",
+                    "kind": "bin"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in executable 'mynet'",
             "cargo": {
                 "args": [
                     "test",
                     "--no-run",
-                    "--bin=sound-classifier",
-                    "--package=sound-classifier"
+                    "--bin=mynet",
+                    "--package=mynet"
                 ],
                 "filter": {
-                    "name": "sound-classifier",
+                    "name": "mynet",
                     "kind": "bin"
                 }
             },

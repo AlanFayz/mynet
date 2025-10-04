@@ -1,77 +1,81 @@
 use bincode;
-use rand::prelude::*;
+use ndarray::{Array1, Array2, ArrayView1, Axis};
+use rand_distr::Distribution;
+use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
 use std::fs::File;
 use std::io::{Read, Write};
-use std::iter::zip;
 
-#[derive(Serialize, Deserialize, Debug)]
-pub struct SigmoidNeuron {
-    pub activation: f32,
-    pub bias: f32,
-    pub bias_deriviative: f32,
-    pub weights: Vec<f32>,
-    pub weight_derivatives: Vec<f32>,
-    pub delta: f32,
+#[allow(dead_code)]
+fn sigmoid(a: f32) -> f32 {
+    1.0 / (1.0 + (-a).exp())
 }
 
-impl SigmoidNeuron {
-    pub fn new(size: u64) -> Self {
-        let mut rng = rand::rng();
-
-        Self {
-            activation: 0.0,
-            bias: rng.random(),
-            bias_deriviative: 0.0,
-            weights: (0..size).map(|_| rng.random::<f32>()).collect(),
-            weight_derivatives: (0..size).map(|_| 0.0).collect(),
-            delta: 0.0,
-        }
-    }
-
-    pub fn set_activation(&mut self, activation: f32) {
-        self.activation = 1.0 / (1.0 + (-activation).exp());
-    }
-
-    pub fn activation_derivative(&self) -> f32 {
-        self.activation * (1.0 - self.activation)
-    }
+#[allow(dead_code)]
+fn sigmoid_derivative(a: &Array1<f32>) -> Array1<f32> {
+    a * (1.0 - a)
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[allow(dead_code)]
+fn leaky_relu(x: f32) -> f32 {
+    if x > 0.0 { x } else { 0.01 * x }
+}
+
+#[allow(dead_code)]
+fn leaky_relu_derivative(a: &Array1<f32>) -> Array1<f32> {
+    a.clone().mapv_into(|x| if x > 0.0 { 1.0 } else { 0.01 })
+}
+
+#[allow(dead_code)]
+fn softmax(x: &Array1<f32>) -> Array1<f32> {
+    let max = x.fold(f32::NEG_INFINITY, |a, &b| a.max(b));
+    let exp_x: Array1<f32> = x.mapv(|v| (v - max).exp());
+    &exp_x / exp_x.sum()
+}
+
+const ACTIVATION_FUNCTION: fn(f32) -> f32 = sigmoid;
+const DERIVATIVE_FUNCTION: fn(&Array1<f32>) -> Array1<f32> = sigmoid_derivative;
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Layer {
-    neurons: Vec<SigmoidNeuron>,
+    weights: Array2<f32>,
+    biases: Array1<f32>,
+    activations: Array1<f32>,
+    deltas: Array1<f32>,
+    weight_derivatives: Array2<f32>,
+    bias_derivatives: Array1<f32>,
 }
 
 impl Layer {
-    pub fn new(size: u64, previous_layer_size: u64) -> Self {
+    pub fn new(size: usize, previous_layer_size: usize) -> Self {
+        let mut rng = rand::rng();
+        let distribution = rand_distr::Normal::new(0.0, 1.0).unwrap();
+
         Self {
-            neurons: (0..size)
-                .map(|_| SigmoidNeuron::new(previous_layer_size))
-                .collect(),
+            weights: Array2::from_shape_fn((size, previous_layer_size), |_| {
+                distribution.sample(&mut rng)
+            }),
+            biases: Array1::from_shape_fn(size, |_| distribution.sample(&mut rng)),
+            activations: Array1::zeros(size),
+            deltas: Array1::zeros(size),
+            weight_derivatives: Array2::zeros((size, previous_layer_size)),
+            bias_derivatives: Array1::zeros(size),
         }
     }
 
     pub fn feed_forward(&mut self, previous_layer: &Self) {
-        for n in 0..self.neurons.len() {
-            let mut sum = 0.0;
-            for w in 0..self.neurons[n].weights.len() {
-                sum += self.neurons[n].weights[w] * previous_layer.neurons[w].activation;
-            }
-
-            let activation = sum + self.neurons[n].bias;
-            self.neurons[n].set_activation(activation);
-        }
+        self.activations = self.weights.dot(&previous_layer.activations) + &self.biases;
+        self.activations.mapv_inplace(ACTIVATION_FUNCTION);
     }
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Network {
     layers: Vec<Layer>,
 }
 
 impl Network {
-    pub fn new(layer_sizes: Vec<u64>) -> Self {
+    pub fn new(layer_sizes: Vec<usize>) -> Self {
         Self {
             layers: layer_sizes
                 .iter()
@@ -80,7 +84,7 @@ impl Network {
                     Layer::new(
                         *layer_size,
                         if index == 0 {
-                            0u64
+                            0 as usize
                         } else {
                             layer_sizes[index - 1]
                         },
@@ -102,223 +106,164 @@ impl Network {
         let mut buffer = Vec::new();
         file.read_to_end(&mut buffer).ok()?;
 
-        let mut decoded: Self = bincode::deserialize(&buffer).ok()?;
-        for l in 0..decoded.layers.len() {
-            for n in 0..decoded.layers[l].neurons.len() {
-                let decoded_layer_neuron = &mut decoded.layers[l].neurons[n];
-                decoded_layer_neuron
-                    .weight_derivatives
-                    .resize(decoded_layer_neuron.weights.len(), 0.0);
-            }
-        }
-
-        return Some(decoded);
+        let decoded: Self = bincode::deserialize(&buffer).ok()?;
+        Some(decoded)
     }
 
-    pub fn get_output(&self) -> Vec<f32> {
-        self.layers
-            .last()
-            .unwrap()
-            .neurons
-            .iter()
-            .map(|neuron| neuron.activation)
-            .collect()
+    pub fn get_output(&self) -> Array1<f32> {
+        self.layers.last().unwrap().activations.clone()
     }
 
-    pub fn set_input(&mut self, input_activations: &Vec<f32>) {
+    pub fn set_input(&mut self, input_activations: &ArrayView1<f32>) {
         let input_layer = &mut self.layers[0];
-
-        for (index, neuron) in input_layer.neurons.iter_mut().enumerate() {
-            neuron.activation = input_activations[index];
-        }
+        input_layer.activations = input_activations.into_owned();
     }
 
     pub fn run(&mut self) {
-        for i in 0..self.layers.len() - 1 {
-            let (left, right) = self.layers.split_at_mut(i + 1);
-            let layer1 = &mut left[i];
-            let layer2 = &mut right[0];
-            layer2.feed_forward(layer1);
+        for i in 1..self.layers.len() {
+            let (left, right) = self.layers.split_at_mut(i);
+            let prev_layer = &mut left[i - 1];
+            let curr_layer = &mut right[0];
+            curr_layer.feed_forward(prev_layer);
         }
     }
 
-    pub fn total_cost(
+    fn step_derivatives(
         &mut self,
-        training_inputs: &Vec<Vec<f32>>,
-        expected_outputs: &Vec<Vec<f32>>,
-    ) -> f32 {
-        assert!(training_inputs.len() == expected_outputs.len());
-
-        let mut total = 0.0;
-        for (input, expect_output) in zip(training_inputs, expected_outputs) {
-            self.set_input(input);
-            self.run();
-
-            let output = self.get_output();
-            assert!(output.len() == expect_output.len());
-
-            let result = output
-                .iter()
-                .enumerate()
-                .map(|(index, activiation)| *activiation - expect_output[index])
-                .fold(0.0, |acc, x| acc + x * x);
-
-            total += result;
-        }
-
-        return total / (2.0 * training_inputs.len() as f32);
-    }
-
-    fn step_derivatives(&mut self, training_input: &Vec<f32>, expected_output: &Vec<f32>) {
+        training_input: &ArrayView1<f32>,
+        expected_output: &ArrayView1<f32>,
+    ) {
         self.set_input(training_input);
         self.run();
 
         let l = self.layers.len() - 1;
+        let activation_derivatives = DERIVATIVE_FUNCTION(&self.layers[l].activations);
 
-        for n in 0..self.layers[l].neurons.len() {
-            let dc_da = self.layers[l].neurons[n].activation - expected_output[n];
-            let activation_derivative = self.layers[l].neurons[n].activation_derivative();
+        let mut deltas = (&self.layers[l].activations - expected_output) * activation_derivatives;
 
-            self.layers[l].neurons[n].delta = dc_da * activation_derivative;
-            self.layers[l].neurons[n].bias_deriviative += self.layers[l].neurons[n].delta;
+        self.layers[l].deltas = deltas.clone();
+        self.layers[l].bias_derivatives += &deltas;
 
-            for w in 0..self.layers[l].neurons[n].weights.len() {
-                self.layers[l].neurons[n].weight_derivatives[w] +=
-                    self.layers[l - 1].neurons[w].activation * self.layers[l].neurons[n].delta;
-            }
-        }
+        let delta_outer = self.layers[l]
+            .deltas
+            .view()
+            .insert_axis(Axis(1))
+            .dot(&self.layers[l - 1].activations.view().insert_axis(Axis(0)));
+
+        self.layers[l].weight_derivatives += &delta_outer;
 
         for l in (1..self.layers.len() - 1).rev() {
-            for n in 0..self.layers[l].neurons.len() {
-                let activation_derivative = self.layers[l].neurons[n].activation_derivative();
-                let mut sum = 0.0;
+            let activation_derivatives = DERIVATIVE_FUNCTION(&self.layers[l].activations);
 
-                for k in 0..self.layers[l + 1].neurons.len() {
-                    sum += self.layers[l + 1].neurons[k].weights[n]
-                        * self.layers[l + 1].neurons[k].delta;
-                }
+            let sums = self.layers[l + 1].weights.t().dot(&deltas);
 
-                self.layers[l].neurons[n].delta = sum * activation_derivative;
-                self.layers[l].neurons[n].bias_deriviative += self.layers[l].neurons[n].delta;
+            deltas = sums * activation_derivatives;
 
-                for w in 0..self.layers[l].neurons[n].weights.len() {
-                    self.layers[l].neurons[n].weight_derivatives[w] +=
-                        self.layers[l].neurons[n].delta * self.layers[l - 1].neurons[w].activation;
-                }
-            }
+            self.layers[l].deltas = deltas.clone();
+            self.layers[l].bias_derivatives += &deltas;
+
+            let delta_outer = self.layers[l]
+                .deltas
+                .view()
+                .insert_axis(Axis(1))
+                .dot(&self.layers[l - 1].activations.view().insert_axis(Axis(0)));
+
+            self.layers[l].weight_derivatives += &delta_outer;
         }
     }
 
     fn zero_gradients(&mut self) {
         for l in 0..self.layers.len() {
-            for n in 0..self.layers[l].neurons.len() {
-                for w in 0..self.layers[l].neurons[n].weights.len() {
-                    self.layers[l].neurons[n].weight_derivatives[w] = 0.0;
-                }
-
-                self.layers[l].neurons[n].bias_deriviative = 0.0;
-            }
+            self.layers[l].weight_derivatives.fill(0.0);
+            self.layers[l].bias_derivatives.fill(0.0);
         }
-    }
-
-    fn average_and_length_gradients(&mut self, count: f32) -> f32 {
-        let mut total: f32 = 0.0;
-
-        for l in 0..self.layers.len() {
-            for n in 0..self.layers[l].neurons.len() {
-                for w in 0..self.layers[l].neurons[n].weights.len() {
-                    self.layers[l].neurons[n].weight_derivatives[w] =
-                        self.layers[l].neurons[n].weight_derivatives[w] / count;
-
-                    total += self.layers[l].neurons[n].weight_derivatives[w];
-                }
-
-                self.layers[l].neurons[n].bias_deriviative =
-                    self.layers[l].neurons[n].bias_deriviative / count;
-
-                total += self.layers[l].neurons[n].bias_deriviative;
-            }
-        }
-
-        return total.sqrt();
     }
 
     fn calculate_derivatives(
         &mut self,
-        training_inputs: &Vec<Vec<f32>>,
-        expected_outputs: &Vec<Vec<f32>>,
-    ) -> f32 {
-        assert_eq!(training_inputs.len(), expected_outputs.len());
+        training_inputs: &Array2<f32>,
+        expected_outputs: &Array2<f32>,
+    ) {
+        assert_eq!(training_inputs.shape()[0], expected_outputs.shape()[0]);
         self.zero_gradients();
 
-        for (input, output) in zip(training_inputs, expected_outputs) {
-            self.step_derivatives(input, output);
-        }
+        let batch_size = training_inputs.shape()[0] / num_cpus::get();
 
-        return self.average_and_length_gradients(training_inputs.len() as f32);
+        let networks: Vec<Self> = training_inputs
+            .axis_iter(Axis(0))
+            .zip(expected_outputs.axis_iter(Axis(0)))
+            .collect::<Vec<_>>()
+            .par_chunks(batch_size)
+            .map(|chunk| {
+                let mut cloned = self.clone();
+
+                for (input_row, expected_row) in chunk {
+                    cloned.step_derivatives(&input_row.view(), &expected_row.view());
+                }
+
+                cloned
+            })
+            .collect();
+
+        for l in 0..self.layers.len() {
+            for network in &networks {
+                self.layers[l].weight_derivatives += &network.layers[l].weight_derivatives;
+                self.layers[l].bias_derivatives += &network.layers[l].bias_derivatives;
+            }
+
+            self.layers[l].weight_derivatives /= networks.len() as f32;
+            self.layers[l].bias_derivatives /= networks.len() as f32;
+        }
     }
 
     pub fn train(
         &mut self,
-        training_inputs: &Vec<Vec<f32>>,
-        expected_outputs: &Vec<Vec<f32>>,
+        training_inputs: &Array2<f32>,
+        expected_outputs: &Array2<f32>,
         learning_rate: f32,
     ) {
-        let cost_derivative_length = self
-            .calculate_derivatives(training_inputs, expected_outputs)
-            .max(1e-6);
+        self.calculate_derivatives(training_inputs, expected_outputs);
 
         for l in 0..self.layers.len() {
-            for n in 0..self.layers[l].neurons.len() {
-                for w in 0..self.layers[l].neurons[n].weights.len() {
-                    let weight = self.layers[l].neurons[n].weights[w];
-                    let weight_derivative = self.layers[l].neurons[n].weight_derivatives[w];
+            self.layers[l].weights = &self.layers[l].weights
+                - (learning_rate / training_inputs.shape()[0] as f32)
+                    * &self.layers[l].weight_derivatives;
 
-                    self.layers[l].neurons[n].weights[w] =
-                        weight - (learning_rate / cost_derivative_length) * weight_derivative;
-                }
-
-                let bias = self.layers[l].neurons[n].bias;
-                let bias_derivative = self.layers[l].neurons[n].bias_deriviative;
-                self.layers[l].neurons[n].bias =
-                    bias - (learning_rate / cost_derivative_length) * bias_derivative;
-            }
+            self.layers[l].biases = &self.layers[l].biases
+                - (learning_rate / training_inputs.shape()[0] as f32)
+                    * &self.layers[l].bias_derivatives;
         }
     }
 
-    pub fn calculate_accuracy(
-        &mut self,
-        inputs: &Vec<Vec<f32>>,
-        outputs: &Vec<Vec<f32>>,
-        threshold: f32,
-    ) -> f32 {
-        assert_eq!(inputs.len(), outputs.len());
-
+    pub fn calculate_accuracy(&mut self, inputs: &Array2<f32>, outputs: &Array2<f32>) -> f32 {
+        assert_eq!(inputs.shape()[0], outputs.shape()[0]);
         let mut total_correct = 0;
-        for (input, output) in zip(inputs, outputs) {
-            self.set_input(input);
+
+        for (input_row, expected_row) in inputs.axis_iter(Axis(0)).zip(outputs.axis_iter(Axis(0))) {
+            self.set_input(&input_row.view());
             self.run();
 
-            println!("--output--");
-            for i in output {
-                print!("{i} ");
-            }
-            println!();
-            println!("--myOutput--");
-            for i in self.get_output() {
-                print!("actual {i} real {} ", if i >= threshold { 1 } else { 0 });
-            }
-            println!();
-            println!("-------");
+            let predicted = self.get_output();
 
-            total_correct += self
-                .get_output()
+            let predicted_index = predicted
                 .iter()
-                .map(|x| if *x >= threshold { 1.0 } else { 0.0 })
                 .enumerate()
-                .all(|(index, x)| x == output[index]) as i32;
+                .max_by(|a, b| a.1.partial_cmp(b.1).unwrap())
+                .map(|(idx, _)| idx)
+                .unwrap();
+
+            let expected_index = expected_row
+                .iter()
+                .enumerate()
+                .max_by(|a, b| a.1.partial_cmp(b.1).unwrap())
+                .map(|(idx, _)| idx)
+                .unwrap();
+
+            if predicted_index == expected_index {
+                total_correct += 1;
+            }
         }
 
-        return total_correct as f32 / inputs.len() as f32;
+        total_correct as f32 / inputs.shape()[0] as f32
     }
 }

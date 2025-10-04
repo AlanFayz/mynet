@@ -1,5 +1,6 @@
 use std::{fs::File, io::Read};
 
+#[allow(dead_code)]
 pub struct EscFile {
     pub name: String,
     pub fold: i32,
