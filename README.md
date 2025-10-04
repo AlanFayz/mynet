@@ -10,6 +10,7 @@ Feel free to clone the repository and experiment with the models yourself. All t
 One prerequisit is you need to have open-blas installed on your system, to do this on ubuntu its
 
 ```
+sudo apt update
 sudo apt install libopenblas-dev
 ```
 
