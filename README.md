@@ -19,6 +19,7 @@ Visualization of training progress:
 ![MNIST Training Curve](images/Figure_1.png)
 
 Raw metrics are available in [`images/Figure_1.csv`](images/Figure_1.csv).
+
 ---
 
 
