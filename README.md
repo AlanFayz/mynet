@@ -4,6 +4,16 @@
 The goal is to explore the behavior of different architectures, activation functions, and optimization strategies in small to medium-scale deep learning experiments.
 
 ---
+# Usage
+
+Feel free to clone the repository and experiment with the models yourself. All the datasets are already available on the github.
+One prerequisit is you need to have open-blas installed on your system, to do this on ubuntu its
+
+```
+sudo apt install libopenblas-dev
+```
+
+---
 
 ## Current Results
 
