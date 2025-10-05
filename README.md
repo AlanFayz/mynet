@@ -18,6 +18,8 @@ sudo apt install libopenblas-dev
 
 ## Current Results
 
+Note: My computer is using an AMD Ryzen 5 7600 results are likely to vary. 
+
 **Dataset:** MNIST  
 
 **Model:** Neural Network with 2 hidden layers with 32 neurons.
