@@ -1,4 +1,8 @@
-use std::{fs::File, io::Read};
+use std::{fs::File, io::Read, path::Path};
+
+use hound::WavReader;
+use ndarray::Array2;
+use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 
 #[allow(dead_code)]
 pub struct EscFile {
@@ -34,5 +38,52 @@ impl EscData {
                 })
                 .collect(),
         })
+    }
+
+    fn load_file(&self, path: &Path) -> Option<Vec<f32>> {
+        Some(
+            WavReader::open(path)
+                .ok()?
+                .samples::<i16>()
+                .step_by(100)
+                .map(|s| (s.unwrap() as f32 / i16::MAX as f32) * 2.0 - 1.0)
+                .collect(),
+        )
+    }
+
+    pub fn load_data(&self) -> Option<(Array2<f32>, Array2<f32>)> {
+        let base_path = Path::new("ESC-50-master/audio");
+        let input_vec: Vec<Vec<f32>> = self
+            .mappings
+            .par_iter()
+            .map(|file| {
+                self.load_file(&base_path.join(&file.name))
+                    .expect("failed to load file")
+            })
+            .collect();
+
+        let inputs = Array2::from_shape_vec(
+            (input_vec.len(), input_vec[0].len()),
+            input_vec.into_iter().flatten().collect(),
+        )
+        .unwrap();
+
+        let output_vec: Vec<Vec<f32>> = self
+            .mappings
+            .par_iter()
+            .map(|file| {
+                let mut ans = vec![0.0; 50];
+                ans[file.target as usize] = 1.0;
+                ans
+            })
+            .collect();
+
+        let outputs = Array2::from_shape_vec(
+            (output_vec.len(), output_vec[0].len()),
+            output_vec.into_iter().flatten().collect(),
+        )
+        .unwrap();
+
+        Some((inputs, outputs))
     }
 }

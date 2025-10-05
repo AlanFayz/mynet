@@ -1,14 +1,9 @@
-use std::collections::HashMap;
-use std::fs::File;
 use std::fs::OpenOptions;
 use std::io::BufWriter;
 use std::io::Write;
 use std::path::Path;
-use std::thread::current;
-use std::time::Duration;
 use std::time::Instant;
 
-use hound::WavReader;
 use ndarray::Array1;
 use ndarray::Array2;
 use ndarray::array;
@@ -23,67 +18,6 @@ mod mnist_data;
 mod network;
 
 extern crate blas_src;
-
-fn get_or_insert_file<'a>(
-    file_buffers: &'a mut HashMap<String, Vec<f32>>,
-    file: &EscFile,
-) -> &'a Vec<f32> {
-    let name = file.name.clone();
-
-    let entry = file_buffers.entry(name.clone());
-    let buf_ref = entry.or_insert_with(|| {
-        let full_path = Path::new("ESC-50-master/audio").join(&name);
-        WavReader::open(full_path)
-            .expect("failed to load file")
-            .samples::<i16>()
-            .step_by(10)
-            .map(|s| s.unwrap() as f32 / i16::MAX as f32)
-            .collect()
-    });
-
-    buf_ref
-}
-
-fn sample(
-    training_data: &EscData,
-    file_buffers: &mut HashMap<String, Vec<f32>>,
-    sample_count: usize,
-) -> (Array2<f32>, Array2<f32>) {
-    let mut rng = rand::rng();
-
-    let epoch: Vec<&EscFile> = training_data
-        .mappings
-        .iter()
-        .choose_multiple(&mut rng, sample_count);
-
-    let input_vec: Vec<Vec<f32>> = epoch
-        .iter()
-        .map(|file| get_or_insert_file(file_buffers, &file).clone())
-        .collect();
-
-    let inputs = Array2::from_shape_vec(
-        (input_vec.len(), input_vec[0].len()),
-        input_vec.into_iter().flatten().collect(),
-    )
-    .unwrap();
-
-    let output_vec: Vec<Vec<f32>> = epoch
-        .iter()
-        .map(|file| {
-            let mut ans = vec![0.0; 50];
-            ans[file.target as usize] = 1.0;
-            ans
-        })
-        .collect();
-
-    let outputs = Array2::from_shape_vec(
-        (output_vec.len(), output_vec[0].len()),
-        output_vec.into_iter().flatten().collect(),
-    )
-    .unwrap();
-
-    (inputs, outputs)
-}
 
 #[allow(dead_code)]
 fn nand_test() {
@@ -153,8 +87,8 @@ fn save_results_to_csv(time: f64, accuracy: f32) {
     let file_exists = Path::new(path).exists();
 
     let file = OpenOptions::new()
-        .create(true)      
-        .append(true)      
+        .create(true)
+        .append(true)
         .open(path)
         .expect("Could not open file");
 
@@ -193,7 +127,7 @@ fn mnist_test() {
 
     let start_time = Instant::now();
     let mut save_timer: f64 = 0.0;
-    
+
     loop {
         let delta_start = Instant::now();
         let (inputs, outputs) = sample_rows(&train_images, &train_labels, 256);
@@ -202,7 +136,7 @@ fn mnist_test() {
         let current_time = (Instant::now() - start_time).as_secs_f64();
 
         save_timer += (Instant::now() - delta_start).as_secs_f64();
-        
+
         if save_timer >= 10.0 {
             let (inputs, outputs) = sample_rows(&test_images, &test_labels, 100);
             let accuracy = network.calculate_accuracy(&inputs, &outputs);
@@ -216,30 +150,41 @@ fn mnist_test() {
 
 #[allow(dead_code)]
 fn esc50_test() {
-    let mut file_buffers = HashMap::<String, Vec<f32>>::new();
+    let (inputs, outputs) = EscData::parse("ESC-50-master/meta/esc50.csv")
+        .unwrap()
+        .load_data()
+        .expect("failed to load data");
 
-    let mut network = Network::read("sound-classifier.bin")
-        .unwrap_or(Network::new(vec![22050usize, 128usize, 50usize]));
+    let mut network = Network::read("sound-classifier.bin").unwrap_or(Network::new(vec![
+        inputs.shape()[1],
+        256,
+        128,
+        50usize,
+    ]));
 
-    let training_data = EscData::parse("ESC-50-master/meta/esc50.csv").unwrap();
+    let start_time = Instant::now();
+    let mut save_timer: f64 = 0.0;
 
-    for _ in 0..1 {
-        let (inputs, outputs) = sample(&training_data, &mut file_buffers, 16usize);
+    loop {
+        let delta_start = Instant::now();
+        let (training_inputs, training_outputs) = sample_rows(&inputs, &outputs, 256);
+        network.train(&training_inputs, &training_outputs, 0.1);
 
-        let prev = Instant::now();
-        network.train(&inputs, &outputs, 0.01);
-        let time_taken = (Instant::now() - prev).as_secs_f64();
-        println!("Time taken: {time_taken}s");
+        let current_time = (Instant::now() - start_time).as_secs_f64();
+
+        save_timer += (Instant::now() - delta_start).as_secs_f64();
+
+        if save_timer >= 10.0 {
+            let (testing_inputs, testing_outputs) = sample_rows(&inputs, &outputs, 100);
+            let accuracy = network.calculate_accuracy(&testing_inputs, &testing_outputs);
+
+            network.serialize("sound-classifier.bin");
+            save_results_to_csv(current_time, accuracy);
+            save_timer = 0.0;
+        }
     }
-
-    let (inputs, outputs) = sample(&training_data, &mut file_buffers, 5);
-    let accuracy = network.calculate_accuracy(&inputs, &outputs);
-
-    println!("{accuracy}");
-
-    network.serialize("sound-classifier.bin");
 }
 
 fn main() {
-    mnist_test();
+    esc50_test();
 }
