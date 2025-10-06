@@ -266,4 +266,20 @@ impl Network {
 
         total_correct as f32 / inputs.shape()[0] as f32
     }
+
+    pub fn classify(&mut self, input: &Array1<f32>) -> usize {
+        self.set_input(&input.view());
+        self.run();
+
+        let predicted = self.get_output();
+
+        let predicted_index = predicted
+            .iter()
+            .enumerate()
+            .max_by(|a, b| a.1.partial_cmp(b.1).unwrap())
+            .map(|(idx, _)| idx)
+            .unwrap();
+
+        predicted_index
+    }
 }
