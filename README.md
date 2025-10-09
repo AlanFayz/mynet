@@ -29,18 +29,23 @@ Note: My computer is using an AMD Ryzen 5 7600 results are likely to vary.
 Visualization of training progress:  
 
 Learning rate - 0.1
+
 ![MNIST Training Curve](images/Figure_1.png)
 
 Learning rate - 5.0
+
 ![MNIST Training Curve](images/Figure_2.png)
 
 Learning rate - 10.0
+
 ![MNIST Training Curve](images/Figure_3.png)
 
 Learning rate - 100.0
+
 ![MNIST Training Curve](images/Figure_4.png)
 
 Learning rate - 500.0
+
 ![MNIST Training Curve](images/Figure_5.png)
 
 ---
