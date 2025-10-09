@@ -131,7 +131,7 @@ fn mnist_test() {
     loop {
         let delta_start = Instant::now();
         let (inputs, outputs) = sample_rows(&train_images, &train_labels, 256);
-        network.train(&inputs, &outputs, 0.1);
+        network.train(&inputs, &outputs, 100.0);
 
         let current_time = (Instant::now() - start_time).as_secs_f64();
 
@@ -186,5 +186,5 @@ fn esc50_test() {
 }
 
 fn main() {
-    esc50_test();
+    mnist_test();
 }
