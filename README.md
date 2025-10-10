@@ -50,7 +50,7 @@ Learning rate - 500.0
 
 From the results, a good strategy might be to start off with a high learning rate, say 100, and then once a decent peak has been hit, switch the learning rate to a more fine-tuned one, like 5.0. Due to the erratic nature of high learning rates, they may learn very quickly initially but will never progress to optimal performance. Analogously, if we have too low a learning rate, although the learning will be stable, it will take much longer (an hour, in the case of 0.1, to get a network that is usable). It may be beneficial to automate this process of increasing and decreasing the learning rates rather than a human doing so by monitoring the relative performance of the network.
 
-**Dataset:** MNIST  
+**Dataset:** ESC50  
 
 **Model:** Neural Network with 2 hidden layers with 1024 and 512 neurons respectively.
 
