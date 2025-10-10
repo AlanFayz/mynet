@@ -45,7 +45,6 @@ impl EscData {
             WavReader::open(path)
                 .ok()?
                 .samples::<i16>()
-                .step_by(100)
                 .map(|s| (s.unwrap() as f32 / i16::MAX as f32) * 2.0 - 1.0)
                 .collect(),
         )
@@ -53,7 +52,7 @@ impl EscData {
 
     #[allow(dead_code)]
     fn compress_data_downsample_direct(&self, audio_sample: &Array2<f32>) -> Array2<f32> {
-        const TARGET_DIM: (usize, usize) = (200, 200);
+        const TARGET_DIM: (usize, usize) = (100, 100);
 
         let audio_size = audio_sample.shape()[1];
         let audio_width = (audio_size as f32).sqrt() as usize;

@@ -152,8 +152,9 @@ pub fn esc50_test() {
 
     let mut network = Network::read("sound-classifier.bin").unwrap_or(Network::new(vec![
         training_inputs.shape()[1],
+        1024,
+        512,
         256,
-        128,
         50usize,
     ]));
 
@@ -162,8 +163,8 @@ pub fn esc50_test() {
 
     loop {
         let delta_start = Instant::now();
-        let (training_inputs, training_outputs) = sample_rows(&training_inputs, &training_outputs, 256);
-        network.train(&training_inputs, &training_outputs, 50.0);
+        let (training_inputs, training_outputs) = sample_rows(&training_inputs, &training_outputs, 64);
+        network.train(&training_inputs, &training_outputs, 100.0);
 
         let current_time = (Instant::now() - start_time).as_secs_f64();
 
