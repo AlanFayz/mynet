@@ -2,7 +2,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import time
 
-plt.ion()  # Turn on interactive mode
+plt.ion()  
 
 fig, ax = plt.subplots()
 

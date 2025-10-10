@@ -144,13 +144,14 @@ pub fn mnist_test() {
 
 #[allow(dead_code)]
 pub fn esc50_test() {
-    let (inputs, outputs) = EscData::parse("ESC-50-master/meta/esc50.csv")
-        .unwrap()
-        .load_data()
-        .expect("failed to load data");
+    let (training_inputs, training_outputs, testing_inputs, testing_outputs) =
+        EscData::parse("ESC-50-master/meta/esc50.csv")
+            .unwrap()
+            .load_data()
+            .expect("failed to load data");
 
     let mut network = Network::read("sound-classifier.bin").unwrap_or(Network::new(vec![
-        inputs.shape()[1],
+        training_inputs.shape()[1],
         256,
         128,
         50usize,
@@ -161,15 +162,15 @@ pub fn esc50_test() {
 
     loop {
         let delta_start = Instant::now();
-        let (training_inputs, training_outputs) = sample_rows(&inputs, &outputs, 256);
-        network.train(&training_inputs, &training_outputs, 0.1);
+        let (training_inputs, training_outputs) = sample_rows(&training_inputs, &training_outputs, 256);
+        network.train(&training_inputs, &training_outputs, 50.0);
 
         let current_time = (Instant::now() - start_time).as_secs_f64();
 
         save_timer += (Instant::now() - delta_start).as_secs_f64();
 
         if save_timer >= 10.0 {
-            let (testing_inputs, testing_outputs) = sample_rows(&inputs, &outputs, 100);
+            let (testing_inputs, testing_outputs) = sample_rows(&testing_inputs, &testing_outputs, 100);
             let accuracy = network.calculate_accuracy(&testing_inputs, &testing_outputs);
 
             network.serialize("sound-classifier.bin");
