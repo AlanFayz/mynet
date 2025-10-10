@@ -50,6 +50,18 @@ Learning rate - 500.0
 
 From the results, a good strategy might be to start off with a high learning rate, say 100, and then once a decent peak has been hit, switch the learning rate to a more fine-tuned one, like 5.0. Due to the erratic nature of high learning rates, they may learn very quickly initially but will never progress to optimal performance. Analogously, if we have too low a learning rate, although the learning will be stable, it will take much longer (an hour, in the case of 0.1, to get a network that is usable). It may be beneficial to automate this process of increasing and decreasing the learning rates rather than a human doing so by monitoring the relative performance of the network.
 
+**Dataset:** MNIST  
+
+**Model:** Neural Network with 2 hidden layers with 1024 and 512 neurons respectively.
+
+**Batch Size:** 64
+
+Learning rate = 100.0
+
+![MNIST Training Curve](images/Figure_6.png)
+
+From just this this test alone we can see the a normal neural network will not suffice. The input data is large (~200_000 samples) and hence the network trains a lot slower. I tried to treat the input data as an image and scale it down like that but the results don't seem to be good enough. It seems we will need a downsizing step (perhaps with a convolutional neural network).
+
 ---
 
 
